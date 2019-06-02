@@ -1,0 +1,6 @@
+[submodule "chofer_nips2017"]
+	path = chofer_nips2017
+	url = https://github.com/c-hofer/nips2017.git
+[submodule "dipha"]
+	path = dipha
+	url = https://github.com/DIPHA/dipha.git

@@ -5,9 +5,12 @@ import multiprocessing
 import os
 import sys
 import numpy as np
-from tda_toolkit.pershombox import calculate_discrete_NPHT_2d
+
+sys.path.append(os.path.join(os.getcwd(), "chofer_nips2017", "tda-toolkit"))
+
+from pershombox import calculate_discrete_NPHT_2d
 from birds_data import images, labels, categories, training_data_labels, load_bounding_box_image
-from persistence_nn.src.sharedCode.provider import Provider
+from chofer_nips2017.src.sharedCode.provider import Provider
 
 colours = ['red', 'green', 'blue']
 
@@ -125,7 +128,8 @@ def get_folder_string(directions, resampled_size, output_path, histogram_normali
     return os.path.join(output_path, folder_string)
 
 
-def do_stuff(directions, resampled_size, output_path, histogram_normalised=False, rgb=True):
+def rotate_all_persistence_diagrams(directions, resampled_size, output_path,
+                                    histogram_normalised=False, rgb=True):
     if rgb:
         colours = globals()['colours']
     else:
@@ -150,8 +154,6 @@ def do_stuff(directions, resampled_size, output_path, histogram_normalised=False
             for view in views[colour].values():
                 view[str(category)] = {}
     for image_id in images:
-        #if len(job_arguments) > 4:
-        #    break
         arguments = {'image_id': image_id,
                      'directions': directions,
                      'resampled_size': resampled_size,
@@ -179,7 +181,6 @@ def do_stuff(directions, resampled_size, output_path, histogram_normalised=False
     for colour in colours:
         print("Saving {}".format(colour))
         provider = Provider({}, None, {})
-        #print(provider.data_views)
         for view_id, view_data in views[colour].items():
             print(view_id)
             provider.add_view(view_id, view_data)
@@ -190,9 +191,7 @@ def do_stuff(directions, resampled_size, output_path, histogram_normalised=False
 
     print("Data saved, Exiting.")
 
-#args = {'image_id':'11786','directions':32, 'resampled_size':None}
-#generate_diagram_job(args)
 if __name__ == '__main__':
     outpath = os.path.join(os.path.dirname(__file__), 'h5images/')
 
-    do_stuff(32, (64,64), outpath)
+    rotate_all_persistence_diagrams(32, (64,64), outpath)

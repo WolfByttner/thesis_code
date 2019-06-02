@@ -7,14 +7,14 @@ import os
 
 import multiprocessing
 
-sys.path.append(os.path.join(os.path.dirname(__file__),"persistence_nn/chofer_torchex"))
+sys.path.append(os.path.join(os.path.dirname(__file__),"chofer_nips2017/chofer_torchex"))
 from sklearn.preprocessing.label import LabelEncoder
 from torch import optim
 from torch.utils.data import SubsetRandomSampler, DataLoader
 from rotated_persistence_diagrams_rgb import colours, get_folder_string
 from birds_data import images, labels, categories, training_data_labels
-from persistence_nn.src.sharedCode.provider import Provider
-from persistence_nn.src.sharedCode.experiments import \
+from chofer_nips2017.src.sharedCode.provider import Provider
+from chofer_nips2017.src.sharedCode.experiments import \
     UpperDiagonalThresholdedLogTransform, \
     pers_dgm_center_init, SLayerPHT, \
     PersistenceDiagramProviderCollate
@@ -22,7 +22,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 import chofer_torchex.utils.trainer as tr
 from chofer_torchex.utils.trainer.plugins import *
-from rotated_persistence_diagrams_rgb import do_stuff
+from rotated_persistence_diagrams_rgb import rotate_all_persistence_diagrams
 
 
 def _parameters():
@@ -283,8 +283,9 @@ if __name__ == '__main__':
                      outpath,histogram_normalised, rgb=True)
     elif params['colour_mode'] == 'grayscale' or params['colour_mode'] == 'grayscale_wide':
         if not os.path.exists(os.path.join(params['data_path'],'gray.h5')):
-            do_stuff(params['directions'], params['resampled_size'],outpath,
-                     histogram_normalised, rgb=False)
+            rotate_all_persistence_diagrams(params['directions'],
+                                            params['resampled_size'],outpath,
+                                            histogram_normalised, rgb=False)
     else:
         raise RuntimeError('Parameter colour_mode = {} not recognised!' \
                            .format(params['colour_mode']))

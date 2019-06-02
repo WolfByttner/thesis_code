@@ -1,1 +1,5 @@
 Data/
+Deps/
+__pycache__/
+*.pyc
+*.swp
