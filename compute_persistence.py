@@ -183,56 +183,6 @@ def compute_persistence_diagram(persistence_pairs, dimension):
         persistence_map[x].append(y)
     return persistence_map
 
-def create_2d_gaussian(u, var):
-    def gaussian_2d(v):
-        if (abs(u[0]-v[0]) > 3 or abs(u[1]-v[1]) > 3):
-            return 0
-        p = ((u[0] - v[0])**2 + (u[1] - v[1])**2) / (2 * var)
-        return pow(e,-p)/(2 * pi * var)
-    return gaussian_2d
-
-
-def p_B_generator(weight_fn, gaussian):
-    def p_B(z):
-        if z is None:
-            return 0
-        weight = weight_fn(z)
-        val = gaussian(z)
-        return weight * val
-    return p_B
-
-
-def create_persistence_remapper(persistence_diagram, settings):
-    remapper = []
-    for x_coord in persistence_diagram:
-        for y_coord in persistence_diagram[x_coord]:
-            gaussian = create_2d_gaussian((x_coord, y_coord), settings.gaussian_var)
-            #remapper.append(lambda z: settings.weight_function(z) * gaussian(z))
-            remapper.append(p_B_generator(settings.weight_function, gaussian))
-    return remapper
-
-
-def compute_persistence_image(persistence_pairs, dimension, settings, d2D):
-    persistence_diagram = compute_persistence_diagram(persistence_pairs, dimension)
-    remapper = create_persistence_remapper(persistence_diagram, settings)
-    width = len(range(0, 255-settings.grid_width+settings.grid_step, settings.grid_step))
-    if d2D:
-        shape = (width, width)
-    else:
-        shape = (width * width,)
-    persistence_image = np.zeros(shape)
-    for i, x in enumerate(range(0, 255-settings.grid_width+settings.grid_step, settings.grid_step)):
-        #if d2D:
-        #    persistence_image.append([])
-        for j, y in enumerate(range(0,255-settings.grid_width+settings.grid_step,
-                                    settings.grid_step)):
-            z = (x, y)
-            if d2D:
-                persistence_image[i,j] = (reduce(lambda val, func: val + func(z), remapper, 0))
-            else:
-                persistence_image[i*width+j] = (reduce(lambda val, func: val + func(z), remapper, 0))
-    return persistence_image
-
 
 def compute_persistence_image_from_image_id(image_id, settings):
     persistence_pairs = compute_persistent_homology_from_image_id(image_id, settings.data_path,
