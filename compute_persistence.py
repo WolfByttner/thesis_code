@@ -1,18 +1,18 @@
 # Copyright (c) 2019 Wolf Byttner
-# 
+#
 # This file is part of the code implementing the thesis
 # "Classifying RGB Images with multi-colour Persistent Homology".
-# 
+#
 #     This file is free software: you can redistribute it and/or modify
 #     it under the terms of the GNU Lesser General Public License as published
 #     by the Free Software Foundation, either version 3 of the License, or
 #     (at your option) any later version.
-# 
+#
 #     This file is distributed in the hope that it will be useful,
 #     but WITHOUT ANY WARRANTY; without even the implied warranty of
 #     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #     GNU Lesser General Public License for more details.
-# 
+#
 #     You should have received a copy of the GNU Lesser General Public License
 #     along with this file.  If not, see <https://www.gnu.org/licenses/>.
 
@@ -36,73 +36,8 @@ from persim.persim import images as persim
 import multiprocessing
 import types
 from operator import itemgetter
-
-data_path = "/home/amahon/thesis/birds/CUB_200_2011/"
-
-def load_images_list(path):
-    images_path = path + "images.txt"
-    images = {}
-    f = open(images_path, 'r')
-    for line in f.read().split("\n"):
-        if len(line) < 1:
-            continue
-        image_id, image_path = line.split(" ")
-        images[image_id] = image_path
-    f.close()
-    return images
-
-def load_bounding_boxes(path):
-    bounding_boxes_path = path + 'bounding_boxes.txt'
-    boxes = {}
-    f = open(bounding_boxes_path, 'r')
-    for line in f.read().split("\n"):
-        if len(line) < 1:
-            continue
-        image_id, x, y, width, height = line.split(" ")
-        boxes[image_id] = [x, y, width, height]
-    f.close()
-    return boxes
-
-def load_class_labels(path):
-    class_labels_path = path + 'image_class_labels.txt'
-    labels = {}
-    f = open(class_labels_path, 'r')
-    for line in f.read().split("\n"):
-        if len(line) < 1:
-            continue
-        image_id, image_label = line.split(" ")
-        labels[image_id] = int(image_label)
-    f.close()
-    return labels
-
-def load_training_data_labels(path):
-    training_class_labels_path = path + 'train_test_split.txt'
-    training_labels = {}
-    f = open(training_class_labels_path, 'r')
-    for line in f.read().split("\n"):
-        if len(line) < 1:
-            continue
-        image_id, image_label = line.split(" ")
-        training_labels[image_id] = bool(int(image_label))
-    f.close()
-    return training_labels
-
-
-
-images = load_images_list(data_path)
-boxes = load_bounding_boxes(data_path)
-labels = load_class_labels(data_path)
-training_data_labels = load_training_data_labels(data_path)
-
-def load_bounding_box_image(image_id, path, images, boxes):
-    image_path = path + 'images/' + images[image_id]
-    x, y, width, height = map(int,map(float,boxes[image_id]))
-    image = imread(image_path)
-    try:
-        bounded_image = image[x:x+width,y:y+height,:]
-    except IndexError:
-        bounded_image = image[x:x+width,y:y+height]
-    return bounded_image
+from birds_data import images, labels, categories, training_data_labels, \
+                       load_bounding_box_image
 
 
 def create_netcdf_from_image_id(image_id, path, images, boxes, out_path):
@@ -112,40 +47,40 @@ def create_netcdf_from_image_id(image_id, path, images, boxes, out_path):
         os.makedirs(out_path + images[image_id])
     print(images[image_id])
     image_orig = load_bounding_box_image(image_id, path, images, boxes)
-    image_interp = scipy.misc.imresize(image_orig, (interp_width,interp_height, 3), interp='bilinear')
+    image_interp = scipy.misc.imresize(image_orig,
+                                       (interp_width, interp_height, 3),
+                                       interp='bilinear')
     try:
-        image = (np.sum(image,axis=2) // 3)
+        image = (np.sum(image, axis=2) // 3)
     except Exception as e:
         print(e)
         image = image_interp
 
     image_histogram, bins = np.histogram(image.flatten(), 256, density=True)
-    cdf = image_histogram.cumsum() # cumulative distribution function
-    cdf = 255 * cdf / cdf[-1] # normalize
+    cdf = image_histogram.cumsum()  # cumulative distribution function
+    cdf = 255 * cdf / cdf[-1]  # normalize
 
     # use linear interpolation of cdf to find new pixel values
     image_equalized = np.interp(image.flatten(), bins[:-1], cdf)
 
     image = image_equalized.reshape(image.shape)
 
-    nc_path = out_path + images[image_id] + '/' + interp_str + 'img.nc'
+    nc_path = os.path.join(out_path, images[image_id], interp_str + 'img.nc')
 
-    nc = nc4.Dataset(nc_path,'w', format='NETCDF3_CLASSIC')
+    nc = nc4.Dataset(nc_path, 'w', format='NETCDF3_CLASSIC')
     x_dim = 'x_dim'
     y_dim = 'y_dim'
     z_dim = 'z_dim'
     dims = image.shape
-    nc.createDimension(x_dim,dims[0])
-    nc.createDimension(y_dim,dims[1])
-    nc.createDimension(z_dim,1)
+    nc.createDimension(x_dim, dims[0])
+    nc.createDimension(y_dim, dims[1])
+    nc.createDimension(z_dim, 1)
     pic = nc.createVariable('IMP', 'f4', (x_dim, y_dim, z_dim))
     print(image_orig.shape)
     print(image.shape)
-    pic[:,:,0] = (np.sum(image,axis=2) // 3)
+    pic[:, :, 0] = (np.sum(image, axis=2) // 3)
     nc.close()
     return nc_path
-
-out_p = "/home/amahon/thesis/persistent_homology/tmp/"
 
 
 class diamorse_options:
@@ -156,14 +91,17 @@ class diamorse_options:
         self.field = bytes('', 'utf-8')
 
 
-def compute_persistent_homology_from_image_id(image_id, path, images, boxes, out_path,
-                                              save_pickle, load_pickle):
-    pickle_path = out_path + images[image_id] + '/' + interp_str + 'dump.pickle'
+def persistent_homology_from_image_id(image_id, path, images,
+                                      boxes, out_path,
+                                      save_pickle, load_pickle):
+    pickle_path = os.path.join(out_path, images[image_id],
+                               interp_str + 'dump.pickle')
     if load_pickle and os.path.exists(pickle_path):
         with open(pickle_path, 'rb') as f:
             pairs = pickle.load(f)
     else:
-        nc_path = create_netcdf_from_image_id(image_id, path, images, boxes, out_path)
+        nc_path = create_netcdf_from_image_id(image_id, path, images,
+                                              boxes, out_path)
         nc_path = bytes(nc_path, 'utf-8')
         opts = diamorse_options(nc_path)
 
@@ -174,39 +112,19 @@ def compute_persistent_homology_from_image_id(image_id, path, images, boxes, out
     return pairs
 
 
-def compute_persistence_diagram(persistence_pairs, dimension):
-    persistence_map = defaultdict(list)
-    for pair in persistence_pairs:
-        if pair[2] != dimension or pair[1] == float('inf'):
-            continue
-        x, y = int(pair[0]), int(pair[1]) - int(pair[0])
-        persistence_map[x].append(y)
-    return persistence_map
-
-
-def compute_persistence_image_from_image_id(image_id, settings):
-    persistence_pairs = compute_persistent_homology_from_image_id(image_id, settings.data_path,
-                                                                  settings.images, settings.boxes,
-                                                                  settings.out_path,
-                                                                  settings.save_pickle,
-                                                                  settings.load_pickle)
-    #print("Computed pairs")
-    persistence_image = compute_persistence_image(persistence_pairs, 0, settings, False)
-    #print("Computed image")
-    return persistence_image
-
 def compute_persim_from_image_id(image_id, settings, transformer):
-    persistence_pairs = compute_persistent_homology_from_image_id(image_id, settings.data_path,
-                                                                  settings.images, settings.boxes,
-                                                                  settings.out_path,
-                                                                  settings.save_pickle,
-                                                                  settings.load_pickle)
-    diagrams = [[],[]]
+    persistence_pairs = persistent_homology_from_image_id(image_id,
+                                                          settings.data_path,
+                                                          settings.images,
+                                                          settings.boxes,
+                                                          settings.out_path,
+                                                          settings.save_pickle,
+                                                          settings.load_pickle)
+    diagrams = [[], []]
     for pair in persistence_pairs:
         if pair[1] == float('inf'):
             continue
-        diagrams[pair[2]].append((pair[0],pair[1]))
-    #print("Computed image")
+        diagrams[pair[2]].append((pair[0], pair[1]))
     persistence_images = transformer.transform(diagrams)
     return persistence_images[0].flatten() + persistence_images[1].flatten()
 
@@ -226,13 +144,13 @@ def get_training_data_for_labels(label_list, labels, training_data_labels):
 def create_persistence_image_and_label(payload):
     image_id, settings, transformer = payload
     try:
-        sample = (compute_persim_from_image_id(image_id, settings, transformer),
+        sample = (compute_persim_from_image_id(image_id, settings,
+                                               transformer),
                   settings.labels[str(image_id)], image_id)
     except Exception as e:
-        print (e)
+        print(e)
         sample = (None, None, image_id)
     return sample
-
 
 
 def weighting(self, landscape=None, print_self=False, print_compact=False):
@@ -243,27 +161,31 @@ def weighting(self, landscape=None, print_self=False, print_compact=False):
             return "C({})_p({})".format(C, p)
         else:
             print("C: {}, p: {}".format(C, p))
+
     def arctan(interval):
-        return (atan(C*(interval[1]-interval[0])**p))
+        return atan(C * (interval[1] - interval[0])**p)
+
     return arctan
 
 
-def create_persistence_images_and_labels(image_labels_dict, settings, is_training=False):
+def create_persistence_images_and_labels(image_labels_dict, settings,
+                                         is_training=False):
     transformer = persim.PersImage(settings.persistence_image_size,
-                                   spread=settings.gaussian_stddev);
-    transformer.weighting = weighting #types.MethodType(weighting, transformer)
+                                   spread=settings.gaussian_stddev)
+    transformer.weighting = weighting
     data = []
     label_list = []
     image_id_list = []
-
 
     if is_training:
         dataset_str = "training/"
     else:
         dataset_str = "evaluation/"
-    cache_dir = settings.out_path + "persistence_images_" + interp_str[:-1] + '/' + \
-                settings.cache_str() + \
-                transformer.weighting(None, None, True, True) + "/" + dataset_str
+    cache_dir = os.path.join(settings.out_path,
+                             "persistence_images_" + interp_str[:-1],
+                             (settings.cache_str() +
+                              transformer.weighting(None, None, True, True)),
+                             dataset_str)
     if settings.load_pickle and os.path.exists(cache_dir):
         with open(cache_dir + "data.pickle", 'rb') as f:
             data = pickle.load(f)
@@ -281,13 +203,16 @@ def create_persistence_images_and_labels(image_labels_dict, settings, is_trainin
                 continue
             image_ids.append((image_id, settings, transformer))
 
-    print("Running computations on {} of {} images".format(len(image_ids), len(image_ids)+len(image_id_list)))
+    print("Running computations on {} of {} images".format(len(image_ids),
+                                                           len(image_ids) +
+                                                           len(image_id_list)))
     transformer.weighting(None, None, print_self=True)
     print("Starting thread pool")
     with multiprocessing.Pool() as pool:
-        persistence_images_with_labels = pool.map(create_persistence_image_and_label, image_ids)
+        persistence_images_with_labels = \
+            pool.map(create_persistence_image_and_label, image_ids)
     for image, label, image_id in persistence_images_with_labels:
-        if label == None:
+        if label is None:
             continue
         data.append(image)
         label_list.append(label)
@@ -302,7 +227,6 @@ def create_persistence_images_and_labels(image_labels_dict, settings, is_trainin
             pickle.dump(label_list, f)
         with open(cache_dir + "image_ids.pickle", 'wb') as f:
             pickle.dump(image_id_list, f)
-
 
     return data, label_list
 
@@ -327,18 +251,16 @@ class prediction_evaluator:
 def evaluate_data_with_model(payload):
     correctness = defaultdict(prediction_evaluator)
     training_data, training_labels, test_data, test_labels, clf = payload
-    #print(clf)
     clf.fit(training_data, training_labels)
     predicted_labels = clf.predict(test_data)
-    #print("Predicted Model")
     for i in range(len(predicted_labels)):
-        correctness[test_labels[i]].add_prediction(predicted_labels[i], test_labels[i])
+        correctness[test_labels[i]].add_prediction(predicted_labels[i],
+                                                   test_labels[i])
     agg_true = 0
     agg_correct = 0
     for label in correctness:
         agg_correct += correctness[label].correct
         agg_true += correctness[label].existing
-    #print("Final result: {:.0%}, {}, {}".format(agg_correct/agg_true, agg_correct, agg_true))
     return (agg_correct/agg_true, clf)
 
 
@@ -347,96 +269,146 @@ def handle_model_timeout(payload):
         return evaluate_data_with_model(payload)
     except multiprocessing.TimeoutError:
         clf = payload[-1]
-        #print("Model timed out", clf);
         return (0, clf)
 
 
-
 def evaluate_data(training_data, training_labels, test_data, test_labels):
-    max_iter=3000
+    max_iter = 3000
     classifiers = []
-    classifiers.append(linear_model.LogisticRegression(random_state=0, solver='newton-cg',
-                                                       multi_class='multinomial', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegression(random_state=0, solver='lbfgs',
-                                                       multi_class='multinomial', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegression(random_state=0, solver='liblinear',
-                                                       multi_class='ovr'))
-    classifiers.append(linear_model.LogisticRegression(random_state=0, solver='liblinear',
-                                                       multi_class='ovr', penalty='l1', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegression(random_state=0, solver='sag',
-                                                       multi_class='multinomial', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegression(random_state=0, solver='saga',
-                                                       multi_class='multinomial', max_iter=max_iter))
 
-    classifiers.append(linear_model.LogisticRegressionCV(random_state=0, solver='newton-cg',
-                                                         multi_class='multinomial', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegressionCV(random_state=0, solver='lbfgs',
-                                                         multi_class='multinomial', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegressionCV(random_state=0, solver='liblinear',
-                                                         multi_class='ovr', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegressionCV(random_state=0, solver='liblinear',
-                                                         multi_class='ovr', penalty='l1', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegressionCV(random_state=0, solver='sag',
-                                                         multi_class='multinomial', max_iter=max_iter))
-    classifiers.append(linear_model.LogisticRegressionCV(random_state=0, solver='saga',
-                                                         multi_class='multinomial', max_iter=max_iter))
+    # It is easier to just test everything.
+    classifiers.append(
+            linear_model.LogisticRegression(random_state=0, solver='newton-cg',
+                                            multi_class='multinomial',
+                                            max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegression(random_state=0, solver='lbfgs',
+                                            multi_class='multinomial',
+                                            max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegression(random_state=0, solver='liblinear',
+                                            multi_class='ovr'))
+    classifiers.append(
+            linear_model.LogisticRegression(random_state=0, solver='liblinear',
+                                            multi_class='ovr', penalty='l1',
+                                            max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegression(random_state=0, solver='sag',
+                                            multi_class='multinomial',
+                                            max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegression(random_state=0, solver='saga',
+                                            multi_class='multinomial',
+                                            max_iter=max_iter))
 
-    classifiers.append(neural_network.MLPClassifier(solver='adam',random_state=0, activation='identity'))
-    classifiers.append(neural_network.MLPClassifier(solver='adam',random_state=0, activation='logistic'))
-    classifiers.append(neural_network.MLPClassifier(solver='adam',random_state=0, activation='tanh'))
-    classifiers.append(neural_network.MLPClassifier(solver='adam',random_state=0, activation='relu'))
+    classifiers.append(
+            linear_model.LogisticRegressionCV(random_state=0,
+                                              solver='newton-cg',
+                                              multi_class='multinomial',
+                                              max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegressionCV(random_state=0, solver='lbfgs',
+                                              multi_class='multinomial',
+                                              max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegressionCV(random_state=0,
+                                              solver='liblinear',
+                                              multi_class='ovr',
+                                              max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegressionCV(random_state=0,
+                                              solver='liblinear',
+                                              multi_class='ovr', penalty='l1',
+                                              max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegressionCV(random_state=0, solver='sag',
+                                              multi_class='multinomial',
+                                              max_iter=max_iter))
+    classifiers.append(
+            linear_model.LogisticRegressionCV(random_state=0, solver='saga',
+                                              multi_class='multinomial',
+                                              max_iter=max_iter))
 
-    classifiers.append(neural_network.MLPClassifier(solver='lbfgs',random_state=0, activation='identity'))
-    classifiers.append(neural_network.MLPClassifier(solver='lbfgs',random_state=0, activation='logistic'))
-    classifiers.append(neural_network.MLPClassifier(solver='lbfgs',random_state=0, activation='tanh'))
-    classifiers.append(neural_network.MLPClassifier(solver='lbfgs',random_state=0, activation='relu'))
+    classifiers.append(neural_network.MLPClassifier(solver='adam',
+                                                    random_state=0,
+                                                    activation='identity'))
+    classifiers.append(neural_network.MLPClassifier(solver='adam',
+                                                    random_state=0,
+                                                    activation='logistic'))
+    classifiers.append(neural_network.MLPClassifier(solver='adam',
+                                                    random_state=0,
+                                                    activation='tanh'))
+    classifiers.append(neural_network.MLPClassifier(solver='adam',
+                                                    random_state=0,
+                                                    activation='relu'))
 
-    classifiers.append(svm.LinearSVC(multi_class="crammer_singer", random_state=0, penalty='l1', dual=False))
-    classifiers.append(svm.LinearSVC(multi_class="crammer_singer", random_state=0, penalty='l2'))
-    classifiers.append(svm.LinearSVC(multi_class="ovr", random_state=0, penalty='l1', dual=False))
-    classifiers.append(svm.LinearSVC(multi_class="ovr", random_state=0, penalty='l2'))
+    classifiers.append(neural_network.MLPClassifier(solver='lbfgs',
+                                                    random_state=0,
+                                                    activation='identity'))
+    classifiers.append(neural_network.MLPClassifier(solver='lbfgs',
+                                                    random_state=0,
+                                                    activation='logistic'))
+    classifiers.append(neural_network.MLPClassifier(solver='lbfgs',
+                                                    random_state=0,
+                                                    activation='tanh'))
+    classifiers.append(neural_network.MLPClassifier(solver='lbfgs',
+                                                    random_state=0,
+                                                    activation='relu'))
+
+    classifiers.append(svm.LinearSVC(multi_class="crammer_singer",
+                                     random_state=0, penalty='l1',
+                                     dual=False))
+    classifiers.append(svm.LinearSVC(multi_class="crammer_singer",
+                                     random_state=0, penalty='l2'))
+    classifiers.append(svm.LinearSVC(multi_class="ovr", random_state=0,
+                                     penalty='l1', dual=False))
+    classifiers.append(svm.LinearSVC(multi_class="ovr", random_state=0,
+                                     penalty='l2'))
 
     classifiers.append(svm.SVC(kernel='linear', random_state=0))
     classifiers.append(svm.SVC(gamma='scale', random_state=0))
 
     payloads = []
     for classifier in classifiers:
-        payloads.append((training_data, training_labels, test_data, test_labels, classifier))
+        payloads.append((training_data, training_labels, test_data,
+                         test_labels, classifier))
     print("Starting Model Evaluation")
     classification_rates = []
 
     async_jobs = []
     with multiprocessing.Pool() as pool:
         for payload in payloads:
-            async_jobs.append(pool.apply_async(handle_model_timeout, (payload,)))
+            async_jobs.append(pool.apply_async(handle_model_timeout,
+                                               (payload,)))
         for async_job in async_jobs:
             try:
                 classification_rates.append(async_job.get(timeout=400))
             except multiprocessing.TimeoutError:
-                #print ("Model did not finish"])
                 pass
             except Exception as e:
-                #print("Model failed due to exception", e)
                 pass
-    best_pair = sorted(classification_rates, key=itemgetter(0), reverse=True)[0]
+    best_pair = sorted(classification_rates, key=itemgetter(0),
+                       reverse=True)[0]
     print("Best classifiers are ({:.2%}):".format(best_pair[0]))
     print(best_pair[1])
 
 
 def evaluate_labels(label_list, settings):
-    training_ids, test_ids = get_training_data_for_labels(label_list,
-                                                          settings.labels,
-                                                          settings.training_data_labels)
+    training_ids, test_ids = \
+        get_training_data_for_labels(label_list, settings.labels,
+                                     settings.training_data_labels)
 
-    training_data, training_labels = create_persistence_images_and_labels(training_ids, settings,
-                                                                          is_training=True)
-    test_data, test_labels = create_persistence_images_and_labels(test_ids, settings)
+    training_data, training_labels = \
+        create_persistence_images_and_labels(training_ids, settings,
+                                             is_training=True)
+    test_data, test_labels = create_persistence_images_and_labels(test_ids,
+                                                                  settings)
     evaluate_data(training_data, training_labels, test_data, test_labels)
 
 
-
 class persistent_image_settings:
-    def __init__(self, images, boxes, out_path, data_path, labels, training_data_labels,
+    def __init__(self, images, boxes, out_path, data_path,
+                 labels, training_data_labels,
                  persistence_image_size, gaussian_stddev):
         self.images = images
         self.boxes = boxes
@@ -453,7 +425,7 @@ class persistent_image_settings:
     grid_step = 10
     grid_width = 20
     save_pickle = True
-    load_pickle = False#True
+    load_pickle = False
 
     def cache_str(self):
         pi_string = "pi({}_{})_".format(*self.persistence_image_size)
@@ -462,14 +434,16 @@ class persistent_image_settings:
 
 interp_width = 200
 interp_height = 200
+interp_str = "{}x{}_".format(interp_width, interp_height) if \
+        (interp_width or interp_height) else ""
 
-interp_str = "{}x{}_".format(interp_width, interp_height) if (interp_width or interp_height) else ""
 
 print("Interpolation:", interp_str[:-1])
-for stddev in [0.5,1,1.5,2]:
-    pi_settings = persistent_image_settings(images, boxes, out_p, data_path, labels,
-                                            training_data_labels, persistence_image_size=(128,128),
+for stddev in [0.5, 1, 1.5, 2]:
+    out_p = os.path.join(os.getcwd(), "tmp")
+    pi_settings = persistent_image_settings(images, boxes, out_p, data_path,
+                                            labels, training_data_labels,
+                                            persistence_image_size=(128, 128),
                                             gaussian_stddev=stddev)
 
-    evaluate_labels(list(range(1,201)), pi_settings)
-
+    evaluate_labels(list(range(1, 201)), pi_settings)

@@ -26,7 +26,7 @@ cd ..
 mkdir Deps
 cd Deps
 wget http://people.maths.ox.ac.uk/nanda/source/perseus_4_beta.zip
-unzip -f perseus_4_beta.zip
+unzip -u perseus_4_beta.zip
 g++ Pers.cpp -O3 -fpermissive -o perseus
 
 cd ..

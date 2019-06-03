@@ -1,18 +1,18 @@
 # Copyright (c) 2019 Wolf Byttner
-# 
+#
 # This file is part of the code implementing the thesis
 # "Classifying RGB Images with multi-colour Persistent Homology".
-# 
+#
 #     This file is free software: you can redistribute it and/or modify
 #     it under the terms of the GNU Lesser General Public License as published
 #     by the Free Software Foundation, either version 3 of the License, or
 #     (at your option) any later version.
-# 
+#
 #     This file is distributed in the hope that it will be useful,
 #     but WITHOUT ANY WARRANTY; without even the implied warranty of
 #     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #     GNU Lesser General Public License for more details.
-# 
+#
 #     You should have received a copy of the GNU Lesser General Public License
 #     along with this file.  If not, see <https://www.gnu.org/licenses/>.
 
@@ -33,9 +33,10 @@ def setup_data_folder():
 
 
 def download_birds_data():
-    url = 'http://www.vision.caltech.edu/visipedia-data/CUB-200-2011/CUB_200_2011.tgz'
+    url = 'http://www.vision.caltech.edu/" +\
+        "visipedia-data/CUB-200-2011/CUB_200_2011.tgz'
     tarball = os.path.join(os.getcwd(), 'Data/CUB_200_2011.tgz')
-    target_directory =  os.path.join(os.getcwd(), 'Data')
+    target_directory = os.path.join(os.getcwd(), 'Data')
 
     setup_data_folder()
     if os.path.exists(data_path):
@@ -115,10 +116,10 @@ training_data_labels = load_training_data_labels(data_path)
 
 def load_bounding_box_image(image_id):
     image_path = os.path.join(data_path, 'images', images[image_id])
-    x, y, width, height = map(int,map(float,boxes[image_id]))
+    x, y, width, height = map(int, map(float, boxes[image_id]))
     image = imread(image_path)
     try:
-        bounded_image = image[x:x+width,y:y+height,:]
+        bounded_image = image[x:x + width, y:y + height, :]
     except IndexError:
-        bounded_image = image[x:x+width,y:y+height]
+        bounded_image = image[x:x + width, y:y + height]
     return bounded_image

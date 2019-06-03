@@ -1,19 +1,19 @@
 # Original work Copyright (c) 2019 Christoph Hofer
 # Modified work Copyright (c) 2019 Wolf Byttner
-# 
+#
 # This file is part of the code implementing the thesis
 # "Classifying RGB Images with multi-colour Persistent Homology".
-# 
+#
 #     This file is free software: you can redistribute it and/or modify
 #     it under the terms of the GNU Lesser General Public License as published
 #     by the Free Software Foundation, either version 3 of the License, or
 #     (at your option) any later version.
-# 
+#
 #     This file is distributed in the hope that it will be useful,
 #     but WITHOUT ANY WARRANTY; without even the implied warranty of
 #     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #     GNU Lesser General Public License for more details.
-# 
+#
 #     You should have received a copy of the GNU Lesser General Public License
 #     along with this file.  If not, see <https://www.gnu.org/licenses/>.
 
@@ -26,7 +26,6 @@ import os
 
 import multiprocessing
 
-sys.path.append(os.path.join(os.path.dirname(__file__),"chofer_nips2017/chofer_torchex"))
 from sklearn.preprocessing.label import LabelEncoder
 from torch import optim
 from torch.utils.data import SubsetRandomSampler, DataLoader
@@ -38,28 +37,31 @@ from chofer_nips2017.src.sharedCode.experiments import \
     pers_dgm_center_init, SLayerPHT, \
     PersistenceDiagramProviderCollate
 from sklearn.model_selection import StratifiedShuffleSplit
+from rotated_persistence_diagrams_rgb import rotate_all_persistence_diagrams
+
+sys.path.append(os.path.join(os.path.dirname(__file__),
+                             "chofer_nips2017/chofer_torchex"))
 
 import chofer_torchex.utils.trainer as tr
 from chofer_torchex.utils.trainer.plugins import *
-from rotated_persistence_diagrams_rgb import rotate_all_persistence_diagrams
 
 
 def _parameters():
     return \
-    {
-        'colour_mode': 'grayscale',
-        'data_path': None,
-        'epochs': 30,
-        'momentum': 0.2,
-        'lr_start': 0.1,
-        'lr_ep_step': 20,
-        'lr_adaption': 0.5,
-        'test_ratio': 0.1,
-        'batch_size': 8,
-        'directions': 32,
-        'resampled_size': (800,800),
-        'cuda': False
-    }
+        {
+            'colour_mode': 'grayscale',
+            'data_path': None,
+            'epochs': 30,
+            'momentum': 0.2,
+            'lr_start': 0.1,
+            'lr_ep_step': 20,
+            'lr_adaption': 0.5,
+            'test_ratio': 0.1,
+            'batch_size': 8,
+            'directions': 32,
+            'resampled_size': (800, 800),
+            'cuda': False
+        }
 
 
 def serialise_params(params):
@@ -67,6 +69,7 @@ def serialise_params(params):
     for key, val in params.items():
         serial += "_{}_{}".format(key, val)
     return serial
+
 
 class SLayerRgbNN(torch.nn.Module):
     def __init__(self, subscripted_views, directions):
@@ -85,13 +88,15 @@ class SLayerRgbNN(torch.nn.Module):
                                 n_elements,
                                 2,
                                 n_neighbor_directions=n_neighbor_directions,
-                                center_init=self.transform(pers_dgm_center_init(n_elements)),
+                                center_init=self.transform(
+                                        pers_dgm_center_init(n_elements)),
                                 sharpness_init=torch.ones(n_elements, 2) * 4)
 
         self.stage_1 = []
         for i in range(len(subscripted_views)):
             seq = nn.Sequential()
-            seq.add_module('conv_1', nn.Conv1d(1 + 2 * n_neighbor_directions, n_filters, 1, bias=False))
+            seq.add_module('conv_1', nn.Conv1d(1 + 2 * n_neighbor_directions,
+                                               n_filters, 1, bias=False))
             seq.add_module('conv_2', nn.Conv1d(n_filters, 8, 1, bias=False))
             self.stage_1.append(seq)
             self.add_module('stage_1_{}'.format(i), seq)
@@ -101,8 +106,7 @@ class SLayerRgbNN(torch.nn.Module):
             seq = nn.Sequential()
             seq.add_module('linear_1', nn.Linear(n_elements, stage_2_out))
             seq.add_module('batch_norm', nn.BatchNorm1d(stage_2_out))
-            seq.add_module('linear_2'
-                           , nn.Linear(stage_2_out, stage_2_out))
+            seq.add_module('linear_2', nn.Linear(stage_2_out, stage_2_out))
             seq.add_module('relu', nn.ReLU())
             seq.add_module('Dropout', nn.Dropout(0.4))
 
@@ -110,7 +114,9 @@ class SLayerRgbNN(torch.nn.Module):
             self.add_module('stage_2_{}'.format(i), seq)
 
         linear_1 = nn.Sequential()
-        linear_1.add_module('linear', nn.Linear(len(subscripted_views) * stage_2_out, 500))
+        linear_1.add_module('linear',
+                            nn.Linear(len(subscripted_views) * stage_2_out,
+                                      500))
         linear_1.add_module('batchnorm', torch.nn.BatchNorm1d(500))
         linear_1.add_module('drop_out', torch.nn.Dropout(0.3))
         self.linear_1 = linear_1
@@ -144,14 +150,20 @@ def train_test_from_dataset(dataset,
     label_encoder = LabelEncoder().fit(sample_labels)
     sample_labels = label_encoder.transform(sample_labels)
 
-    label_map = lambda l: int(label_encoder.transform([l])[0])
+    def label_remapper(label):
+        return int(label_encoder.transform([l])[0])
 
-    collate_fn = PersistenceDiagramProviderCollate(dataset, label_map=label_map)
+    label_map = label_remapper
 
-    train_ids = np.array([label_map(image_id) for image_id in dataset.sample_labels if training_data_labels[image_id]])
-    test_ids = np.array([label_map(image_id) for image_id in dataset.sample_labels if not training_data_labels[image_id]])
-    #sp = StratifiedShuffleSplit(n_splits=1, test_size=0.5)
-    #train_ids, test_ids = list(sp.split([0]*len(sample_labels), sample_labels))[0]
+    collate_fn = PersistenceDiagramProviderCollate(dataset,
+                                                   label_map=label_map)
+
+    train_ids = np.array([label_map(image_id)
+                          for image_id in dataset.sample_labels
+                          if training_data_labels[image_id]])
+    test_ids = np.array([label_map(image_id)
+                         for image_id in dataset.sample_labels
+                         if not training_data_labels[image_id]])
 
     data_train = DataLoader(dataset,
                             batch_size=batch_size,
@@ -179,7 +191,8 @@ def load_data(params):
     grayscale_wide = params['colour_mode'] == 'grayscale_wide'
 
     view_name_template = 'dim_0_dir_{}'
-    subscripted_views = sorted([view_name_template.format(i) for i in range(params['directions'])])
+    subscripted_views = sorted([view_name_template.format(i)
+                               for i in range(params['directions'])])
     assert (str(len(subscripted_views)) in params['data_path'])
 
     subscripted_views_colour = []
@@ -198,9 +211,11 @@ def load_data(params):
             print("Accuracy: Modified grayscale")
         for colour in colours:
             if rgb:
-                datasets.append(read_provider(os.path.join(params['data_path'], colour + '.h5')))
+                datasets.append(read_provider(os.path.join(params['data_path'],
+                                              colour + '.h5')))
             else:
-                datasets.append(read_provider(os.path.join(params['data_path'], 'gray' + '.h5')))
+                datasets.append(read_provider(os.path.join(params['data_path'],
+                                'gray' + '.h5')))
 
         print("Merging providers")
         merged_dataset = Provider(dict(), None, dict())
@@ -210,11 +225,13 @@ def load_data(params):
                 merged_dataset.add_view(key, datasets[i].data_views[view])
 
     else:
-        merged_dataset = read_provider(os.path.join(params['data_path'], 'gray.h5'))
+        merged_dataset = read_provider(os.path.join(params['data_path'],
+                                                    'gray.h5'))
 
     print('Create data loader...')
-    data_train, data_test = train_test_from_dataset(merged_dataset,
-                                                    batch_size=params['batch_size'])
+    data_train, data_test = \
+        train_test_from_dataset(merged_dataset,
+                                batch_size=params['batch_size'])
 
     return data_train, data_test, subscripted_views_colour
 
@@ -279,35 +296,36 @@ def train_network(parameters):
 
     print("Saving model")
     model_path = os.path.join(parameters['data_path'],
-                              "model" + serialise_params(parameters) + ".torch")
+                              "model" + serialise_params(parameters) +
+                              ".torch")
     torch.save(model.state_dict(), model_path)
 
-    last_10_accuracies = list(trainer.prediction_monitor.accuracies.values())[-10:]
+    last_10_accuracies = \
+        list(trainer.prediction_monitor.accuracies.values())[-10:]
     mean = np.mean(last_10_accuracies)
 
     return mean
 
 
-
 if __name__ == '__main__':
     params = _parameters()
-    histogram_normalised=True
+    histogram_normalised = True
     outpath = os.path.join(os.path.dirname(__file__), 'h5images')
     params['data_path'] = get_folder_string(32, params['resampled_size'],
                                             outpath,
-                                            histogram_normalised=histogram_normalised)
+                                            histogram_normalised)
     if params['colour_mode'] == 'rgb':
-        if not os.path.exists(os.path.join(params['data_path'],'red.h5')):
+        if not os.path.exists(os.path.join(params['data_path'], 'red.h5')):
             do_stuff(params['directions'], params['resampled_size'],
-                     outpath,histogram_normalised, rgb=True)
-    elif params['colour_mode'] == 'grayscale' or params['colour_mode'] == 'grayscale_wide':
-        if not os.path.exists(os.path.join(params['data_path'],'gray.h5')):
+                     outpath, histogram_normalised, rgb=True)
+    elif params['colour_mode'] == 'grayscale' or \
+            params['colour_mode'] == 'grayscale_wide':
+        if not os.path.exists(os.path.join(params['data_path'], 'gray.h5')):
             rotate_all_persistence_diagrams(params['directions'],
-                                            params['resampled_size'],outpath,
+                                            params['resampled_size'], outpath,
                                             histogram_normalised, rgb=False)
     else:
-        raise RuntimeError('Parameter colour_mode = {} not recognised!' \
+        raise RuntimeError('Parameter colour_mode = {} not recognised!'
                            .format(params['colour_mode']))
     mean = train_network(params)
     print("Mean is {}".format(mean))
-
