@@ -36,8 +36,9 @@ from persim.persim import images as persim
 import multiprocessing
 import types
 from operator import itemgetter
-from birds_data import images, labels, categories, training_data_labels, \
-                       load_bounding_box_image
+from birds_data import images, labels, categories, \
+                       data_path, training_data_labels, \
+                       boxes, load_bounding_box_image
 
 
 def create_netcdf_from_image_id(image_id, path, images, boxes, out_path):
@@ -46,12 +47,12 @@ def create_netcdf_from_image_id(image_id, path, images, boxes, out_path):
     if not os.path.exists(out_path + images[image_id]):
         os.makedirs(out_path + images[image_id])
     print(images[image_id])
-    image_orig = load_bounding_box_image(image_id, path, images, boxes)
+    image_orig = load_bounding_box_image(image_id)
     image_interp = scipy.misc.imresize(image_orig,
                                        (interp_width, interp_height, 3),
                                        interp='bilinear')
     try:
-        image = (np.sum(image, axis=2) // 3)
+        image = (np.sum(image_interp, axis=2) // 3)
     except Exception as e:
         print(e)
         image = image_interp
@@ -440,7 +441,7 @@ interp_str = "{}x{}_".format(interp_width, interp_height) if \
 
 print("Interpolation:", interp_str[:-1])
 for stddev in [0.5, 1, 1.5, 2]:
-    out_p = os.path.join(os.getcwd(), "tmp")
+    out_p = os.path.join(os.getcwd(), "tmp/")
     pi_settings = persistent_image_settings(images, boxes, out_p, data_path,
                                             labels, training_data_labels,
                                             persistence_image_size=(128, 128),

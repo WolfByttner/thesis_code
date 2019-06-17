@@ -33,8 +33,8 @@ def setup_data_folder():
 
 
 def download_birds_data():
-    url = 'http://www.vision.caltech.edu/" +\
-        "visipedia-data/CUB-200-2011/CUB_200_2011.tgz'
+    url = 'http://www.vision.caltech.edu/'
+    url += 'visipedia-data/CUB-200-2011/CUB_200_2011.tgz'
     tarball = os.path.join(os.getcwd(), 'Data/CUB_200_2011.tgz')
     target_directory = os.path.join(os.getcwd(), 'Data')
 

@@ -25,7 +25,8 @@ import os
 import sys
 import numpy as np
 
-from birds_data import images, labels, categories, training_data_labels, \
+from birds_data import images, labels, categories, \
+                       training_data_labels, \
                        load_bounding_box_image
 from chofer_nips2017.src.sharedCode.provider import Provider
 
